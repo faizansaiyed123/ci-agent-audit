@@ -23,6 +23,8 @@
 - Docker actions match with any tag or digest, so `docker://pragent/pr-agent:<tag>` is recognized as PR-Agent.
 - Agent commands started inside `docker run` or `podman run`, such as `docker run --rm image claude -p ...`, are detected.
 
+- OpenHands CLI's `--always-approve`, `--yolo`, and `--headless` approval-bypass flags now raise AIA002. Thanks to @faizansaiyed123.
+
 ## 0.1.4 (2026-11-03)
 
 ### Added

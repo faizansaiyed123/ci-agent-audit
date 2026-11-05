@@ -804,6 +804,50 @@ direct:
                 run: echo "task=$BODY" >> "$GITHUB_OUTPUT"
               - run: openhands --task "${{ steps.text.outputs.task }}"
 
+
+  - name: openhands-cli-always-approve
+    gap: true
+    expect: [AIA002]
+    files:
+      .github/workflows/ai.yml: |
+        on: [issues]
+        permissions:
+          contents: read
+        jobs:
+          ai:
+            runs-on: ubuntu-latest
+            steps:
+              - run: openhands --always-approve --task "Review the formatting rules."
+
+  - name: openhands-cli-yolo
+    gap: true
+    expect: [AIA002]
+    files:
+      .github/workflows/ai.yml: |
+        on: [issues]
+        permissions:
+          contents: read
+        jobs:
+          ai:
+            runs-on: ubuntu-latest
+            steps:
+              - run: openhands --yolo --task "Review the formatting rules."
+
+  - name: openhands-cli-headless
+    gap: true
+    expect: [AIA002]
+    files:
+      .github/workflows/ai.yml: |
+        on: [issues]
+        permissions:
+          contents: read
+        jobs:
+          ai:
+            runs-on: ubuntu-latest
+            steps:
+              - run: openhands --headless --task "Review the formatting rules."
+
+safe:
 composite:
   - name: composite-input-into-prompt
     expect: [AIA001]
@@ -1475,49 +1519,6 @@ gaps:
             steps:
               - run: uv run openhands --task "${{ github.event.issue.body }}"
 
-  - name: openhands-cli-always-approve
-    gap: true
-    expect: [AIA002]
-    files:
-      .github/workflows/ai.yml: |
-        on: [issues]
-        permissions:
-          contents: read
-        jobs:
-          ai:
-            runs-on: ubuntu-latest
-            steps:
-              - run: openhands --always-approve --task "Review the formatting rules."
-
-  - name: openhands-cli-yolo
-    gap: true
-    expect: [AIA002]
-    files:
-      .github/workflows/ai.yml: |
-        on: [issues]
-        permissions:
-          contents: read
-        jobs:
-          ai:
-            runs-on: ubuntu-latest
-            steps:
-              - run: openhands --yolo --task "Review the formatting rules."
-
-  - name: openhands-cli-headless
-    gap: true
-    expect: [AIA002]
-    files:
-      .github/workflows/ai.yml: |
-        on: [issues]
-        permissions:
-          contents: read
-        jobs:
-          ai:
-            runs-on: ubuntu-latest
-            steps:
-              - run: openhands --headless --task "Review the formatting rules."
-
-safe:
   - name: trusted-prompt
     safe: true
     files:

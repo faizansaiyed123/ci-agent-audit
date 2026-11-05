@@ -24,3 +24,10 @@ dangerous_inputs: {}
 dangerous_arg_patterns:
   - pattern: "--no-sandbox"
     reason: "Runs OpenHands agent directly on the CI runner host without container isolation."
+  - pattern: "openhands\\s+.*--always-approve(?:\\s|$)"
+    reason: "Automatically approves all OpenHands actions without asking for confirmation. See https://github.com/OpenHands/OpenHands-CLI/blob/283c6ac3610f4299f405f7389f65766dcb83e12a/openhands_cli/argparsers/util.py."
+  - pattern: "openhands\\s+.*--yolo(?:\\s|$)"
+    reason: "Alias for --always-approve; it bypasses confirmation for all actions. See https://github.com/OpenHands/OpenHands-CLI/blob/283c6ac3610f4299f405f7389f65766dcb83e12a/openhands_cli/argparsers/util.py."
+  - pattern: "openhands\\s+.*--headless(?:\\s|$)"
+    reason: "Headless mode automatically approves agent actions. See https://github.com/OpenHands/OpenHands-CLI/blob/283c6ac3610f4299f405f7389f65766dcb83e12a/openhands_cli/argparsers/main_parser.py."
+
