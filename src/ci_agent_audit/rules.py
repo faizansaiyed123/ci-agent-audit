@@ -278,7 +278,10 @@ HARD_FAIL_RE = re.compile(r"core\.setFailed|\bexit\s+1\b|process\.exit\(1\)|thro
 
 RUNS_AFTER_SKIP_RE = re.compile(r"\b(?:always|failure|cancelled)\s*\(", re.IGNORECASE)
 EVAL_LINE_RE = re.compile(r"\beval\b|\b(?:ba)?sh\s+-c\b|\bpython3?\s+-c\b|\bnode\s+-e\b|\|\s*(?:ba)?sh\b")
-FILE_EXEC_RE = r"(?:\b(?:ba)?sh|\bsource|\bpython3?|\bnode|(?:^|[;&|])\s*\.)\s+\S*"
+FILE_EXEC_RE = r"(?:\b(?:ba)?sh|\bsource|\bpython3?|\bnode|(?:^|[;&|])\s*\.)\s+\S*|(?:^|[;&|])\s*\./"
+SHELL_SCRIPT_CALL_RE = re.compile(
+    r"""(?:(?<![\w./-])(?:ba)?sh|source|\.)\s+(?P<shell>[^\s;&|]+)|(?P<direct>\./[^\s;&|]+\.sh)"""
+)
 PR_CHECKOUT_COMMAND_RE = re.compile(r"\bgh\s+pr\s+checkout\b|\bgit\s+fetch\b[^\n]*\bpull/")
 GIT_TARGET_LINE_RE = re.compile(r"\bgit\s+(?:checkout|switch|branch|push|reset|clone)\b")
 DEFAULT_BRANCH_PUSH_RE = re.compile(
@@ -644,6 +647,7 @@ class _Follow:
         self.root = root
         self.visits_left = MAX_FOLLOWED_CALLS
         self._loaded: dict[Path, tuple[_Source, LineDict] | None] = {}
+        self._scripts: dict[Path, _Source | None] = {}
 
     @staticmethod
     def _read(path: Path) -> tuple[_Source, LineDict] | None:
@@ -685,6 +689,81 @@ class _Follow:
             return None
         loaded = self._load(uses, stack)
         return loaded if loaded and isinstance(loaded[1].get("jobs"), LineDict) else None
+
+    def script(self, path: str, base_dir: Path, stack: tuple[Path, ...]) -> _Source | None:
+        """Return a repository-local shell script, if it can be read safely."""
+        if self.root is None or self.visits_left <= 0:
+            return None
+        candidate = Path(os.path.normpath(base_dir / path))
+        try:
+            resolved = candidate.resolve()
+            root = self.root.resolve()
+        except OSError:
+            return None
+        if resolved in stack or not resolved.is_relative_to(root):
+            return None
+        self.visits_left -= 1
+        if resolved not in self._scripts:
+            try:
+                self._scripts[resolved] = _Source(resolved, resolved.read_text(encoding="utf-8").splitlines())
+            except (OSError, UnicodeDecodeError):
+                self._scripts[resolved] = None
+        return self._scripts[resolved]
+
+
+def _shell_script_paths(run: str) -> list[str]:
+    """Return shell-script paths explicitly invoked by a run block."""
+    paths: list[str] = []
+    for match in SHELL_SCRIPT_CALL_RE.finditer(run):
+        value = match.group("shell") or match.group("direct")
+        if value:
+            value = value.strip("'\"")
+            if value not in paths:
+                paths.append(value)
+    return paths
+
+
+def _follow_shell_scripts(
+    run: str,
+    follow: _Follow | None,
+    root: Path | None,
+    working_directory: str,
+    stack: tuple[Path, ...],
+    depth: int = 0,
+) -> list[_Source]:
+    """Follow repository-local shell scripts from a run block for at most one nested call."""
+    if follow is None or root is None or depth > 1:
+        return []
+    base_dir = root / working_directory if working_directory else root
+    sources: list[_Source] = []
+    for path in _shell_script_paths(run):
+        source = follow.script(path, base_dir, stack)
+        if source is None:
+            continue
+        sources.append(source)
+        if depth == 0:
+            for nested in _follow_shell_scripts(
+                "\n".join(source.lines), follow, root, str(source.path.parent.relative_to(root)), (*stack, source.path), 1
+            ):
+                if nested.path not in {item.path for item in sources}:
+                    sources.append(nested)
+    return sources
+
+
+def _script_match_line(source: _Source, signatures: list[ActionSignature]) -> int:
+    """Return the first line containing a matched agent command."""
+    for line_num, line in enumerate(source.lines, 1):
+        if _match_cli_signatures(line, signatures):
+            return line_num
+    return 1
+
+
+def _pattern_line(source: _Source, pattern: str) -> int:
+    """Return the line containing a dangerous flag match."""
+    for line_num, line in enumerate(source.lines, 1):
+        if re.search(pattern, line):
+            return line_num
+    return 1
 
 
 def _repo_root(path: Path) -> Path | None:
@@ -1375,6 +1454,71 @@ def _scan_github_job(
                         ),
                     )
                 )
+
+        # Inspect repository-local shell scripts called by the step.
+        working_directory = str(step.get("working-directory") or "")
+        script_sources = _follow_shell_scripts(
+            run_val,
+            follow,
+            follow.root if follow else None,
+            working_directory,
+            stack,
+        )
+        for script_source in script_sources:
+            script_text = "\n".join(script_source.lines)
+            script_cli_sigs = _match_cli_signatures(script_text, signatures)
+            if not script_cli_sigs:
+                continue
+            script_line = _script_match_line(script_source, script_cli_sigs)
+            if not has_ai_step:
+                has_ai_step = True
+                first_ai_step_line = script_line
+                first_ai_source = script_source
+                first_ai_tool_id = script_cli_sigs[0].id
+            agent_outside_gate = agent_outside_gate or not behind_gate
+            agent_holds_token = agent_holds_token or not _has_cleared_token(step_env)
+            agent_unsandboxed = True
+            model_state.agent_steps.update({str(step["id"]).lower()} if step.get("id") else set())
+            for cli_sig in script_cli_sigs:
+                taint_sources = taint_state.sources(script_text, tainted_env)
+                if taint_sources:
+                    findings.append(
+                        _make_finding(
+                            rule_id="AIA001",
+                            file_path=script_source.path,
+                            line=script_line,
+                            col=1,
+                            job_id=job_id,
+                            step_name=step_name,
+                            tool_id=cli_sig.id,
+                            snippet=_get_snippet(script_source.lines, script_line),
+                            message=(
+                                f"Untrusted input ({_describe_sources(taint_sources)}) flows into "
+                                f"{cli_sig.name} CLI invocation in shell script `{script_source.path.name}` "
+                                "(PromptPwnd risk)."
+                            ),
+                            severity=taint_severity,
+                        )
+                    )
+                for flag_pat in cli_sig.dangerous_arg_patterns:
+                    flag_line = _pattern_line(script_source, flag_pat.pattern)
+                    if re.search(flag_pat.pattern, script_text):
+                        findings.append(
+                            _make_finding(
+                                rule_id="AIA002",
+                                file_path=script_source.path,
+                                line=flag_line,
+                                col=1,
+                                job_id=job_id,
+                                step_name=step_name,
+                                tool_id=cli_sig.id,
+                                snippet=_get_snippet(script_source.lines, flag_line),
+                                message=(
+                                    f"{cli_sig.name} invoked with dangerous flag matching "
+                                    f"`{flag_pat.pattern}`: {flag_pat.reason}"
+                                ),
+                            )
+                        )
 
         _absorb_step(taint_state, step)
         _absorb_step(model_state, step)

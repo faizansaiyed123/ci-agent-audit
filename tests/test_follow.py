@@ -243,6 +243,77 @@ runs:
     assert "AIA001" not in _rules(path)
 
 
+def test_shell_script_agent_uses_script_findings_and_lines(tmp_path: Path) -> None:
+    path = _repo(
+        tmp_path,
+        {
+            ".github/workflows/ai.yml": """
+on: [issues]
+permissions:
+  contents: read
+jobs:
+  ai:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: ./scripts/triage.sh
+""",
+            "scripts/triage.sh": """#!/bin/sh
+echo "starting"
+claude -p "$BODY" --dangerously-skip-permissions
+""",
+        },
+    )
+    findings = scan_workflow_file(path)
+    prompt = next(finding for finding in findings if finding.rule_id == "AIA001")
+    dangerous = next(finding for finding in findings if finding.rule_id == "AIA002")
+    assert prompt.file_path.name == "triage.sh"
+    assert prompt.line == 3
+    assert dangerous.file_path.name == "triage.sh"
+    assert dangerous.line == 3
+
+
+def test_shell_script_without_agent_is_ignored(tmp_path: Path) -> None:
+    path = _repo(
+        tmp_path,
+        {
+            ".github/workflows/ai.yml": """
+on: [issues]
+jobs:
+  ai:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: bash scripts/triage.sh
+""",
+            "scripts/triage.sh": 'echo "$BODY"\n',
+        },
+    )
+    assert "AIA001" not in _rules(path)
+
+
+def test_shell_script_outside_repository_is_ignored(tmp_path: Path) -> None:
+    path = _repo(
+        tmp_path,
+        {
+            ".github/workflows/ai.yml": """
+on: [issues]
+jobs:
+  ai:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          BODY: ${{ github.event.issue.body }}
+        run: bash ../triage.sh
+""",
+            "../triage.sh": 'claude -p "$BODY"\n',
+        },
+    )
+    assert "AIA001" not in _rules(path)
+
+
 def test_env_exported_by_an_action_reaches_later_steps(tmp_path: Path) -> None:
     path = _repo(
         tmp_path,
