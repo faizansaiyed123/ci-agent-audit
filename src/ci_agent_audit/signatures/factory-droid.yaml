@@ -11,8 +11,6 @@ cli_packages:
 cli_subcommands:
   - exec
 prompt_inputs:
-  - prompt
-  - prompt_file
   - instructions
 cli_prompt_flags:
   - -f
