@@ -1419,6 +1419,22 @@ guards:
                   llm-api-key: ${{ secrets.LLM_API_KEY }}
               - run: echo "Found ${{ steps.fix.outputs.vulnerabilities-found }}, ${{ steps.fix.outputs.scan-only }}"
 
+  - name: agent-inside-custom-script
+    expect: [AIA001]
+    files:
+      .github/workflows/ai.yml: |
+        on: [issues]
+        jobs:
+          ai:
+            runs-on: ubuntu-latest
+            steps:
+              - env:
+                  BODY: ${{ github.event.issue.body }}
+                run: ./scripts/triage.sh
+      scripts/triage.sh: |
+        #!/bin/sh
+        claude -p "$BODY"
+
 gaps:
   - name: remote-reusable-workflow
     gap: true
@@ -1431,20 +1447,6 @@ gaps:
             uses: acme/shared/.github/workflows/agent.yml@v1
             with:
               text: ${{ github.event.issue.body }}
-
-  - name: agent-inside-custom-script
-    gap: true
-    expect: [AIA001]
-    files:
-      .github/workflows/ai.yml: |
-        on: [issues]
-        jobs:
-          ai:
-            runs-on: ubuntu-latest
-            steps:
-              - env:
-                  BODY: ${{ github.event.issue.body }}
-                run: python scripts/triage.py
 
   - name: tool-without-a-signature
     gap: true

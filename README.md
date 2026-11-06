@@ -255,11 +255,11 @@ Every change runs against [`benchmark/cases.yml`](https://github.com/layer8labs8
 | Direct risks              |     54 |              55 |      0 |            0 |
 | Local composite actions   |     10 |              10 |      0 |            0 |
 | Reusable workflows        |      8 |               8 |      0 |            0 |
-| Guard and data-flow traps |      8 |               8 |      0 |            0 |
+| Guard and data-flow traps |      9 |               9 |      0 |            0 |
 | Safe setups               |     35 |              10 |      0 |            0 |
-| Known gaps                |      7 |               0 |      7 |            0 |
+| Known gaps                |      6 |               0 |      6 |            0 |
 
-That's 92.9% recall and 100% precision on these cases. We wrote them ourselves, so treat this as a regression check and not a promise about your repository. The seven misses cover remote reusable workflows, agents inside custom scripts, tools with no signature yet, and OpenHands CLI wrappers and approval flags. The OpenHands report adds known misses without changing the scanner engine.
+That's 93.9% recall and 100% precision on these cases. We wrote them ourselves, so treat this as a regression check and not a promise about your repository. The six misses cover remote reusable workflows, tools with no signature yet, and OpenHands CLI wrappers and approval flags. The OpenHands report adds known misses without changing the scanner engine.
 
 Engine changes are also compared on the CI files of 135 public repositories that use AI agents. Following local files raised the repositories with a finding from 83 to 95, with no crashes, and the scan ran about a third faster. Those findings are risky patterns, not proven attacks.
 
@@ -282,7 +282,7 @@ A scanner finds risky patterns, not proven attacks. A clean report does not mean
 - It follows composite actions and reusable workflows in the same repository, but it never downloads remote ones. Anything behind `uses: owner/repo/...` stays out of sight, except for known AI actions.
 - A reusable workflow that only other repositories call is scanned alone, so it can't see their triggers or checks.
 - Local calls are only followed for files in `.github/workflows`. A file scanned from anywhere else is read alone.
-- It doesn't follow data through artifacts, caches, or custom scripts.
+- It doesn't follow data through artifacts, caches, or Python, Node, or other non-shell custom scripts.
 - Workflow or job `env:` only counts as agent input when the tool reads that setting from the environment, like PR-Agent's `PR_REVIEWER__EXTRA_INSTRUCTIONS`. Other inherited variables stay quiet, even though an agent with a shell could read them.
 - It can't detect agents that read issues through their own built-in tools when the workflow doesn't mention them.
 - It flags untrusted data anywhere in a `run:` block that starts an agent, even if the agent never reads that data.
