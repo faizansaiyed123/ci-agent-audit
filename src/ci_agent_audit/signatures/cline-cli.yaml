@@ -1,0 +1,16 @@
+id: cline-cli
+name: Cline CLI
+vendor: Cline
+description: Cline CLI autonomous coding agent used in CI workflows for automated code edits, reviews and issue analysis.
+cli_binaries:
+  - cline
+cli_packages:
+  - cline
+dangerous_inputs: {}
+dangerous_arg_patterns:
+  - pattern: "cline\\s+.*--yolo(?:\\s|$)"
+    reason: "YOLO mode runs Cline unattended, skipping the interactive UI and approval prompts."
+  - pattern: "cline\\s+-y(?:\\s|$)"
+    reason: "The -y shorthand enables Cline YOLO mode and runs the agent unattended."
+  - pattern: "cline\\s+.*--auto-approve[=\\s]+true(?:\\s|$)"
+    reason: "Auto-approves all Cline tool calls, including file edits and shell commands, without confirmation."
