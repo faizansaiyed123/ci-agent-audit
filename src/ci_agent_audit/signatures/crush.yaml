@@ -1,0 +1,14 @@
+id: crush
+name: Crush
+vendor: Charmbracelet
+description: Charmbracelet Crush terminal coding agent used in CI workflows for automated code edits and one-off tasks.
+cli_binaries:
+  - crush
+cli_packages:
+  - "@charmland/crush"
+cli_subcommands:
+  - run
+dangerous_inputs: {}
+dangerous_arg_patterns:
+  - pattern: "crush\\s+.*--yolo(?:\\s|$)"
+    reason: "Skips all Crush permission prompts, so tool calls and shell commands run without approval."
