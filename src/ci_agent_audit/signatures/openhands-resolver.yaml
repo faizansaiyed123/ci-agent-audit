@@ -24,3 +24,9 @@ dangerous_inputs: {}
 dangerous_arg_patterns:
   - pattern: "--no-sandbox"
     reason: "Runs OpenHands agent directly on the CI runner host without container isolation."
+  - pattern: "openhands\\s+.*--always-approve(?:\\s|$)"
+    reason: "Automatically approves all actions without asking for confirmation."
+  - pattern: "openhands\\s+.*--yolo(?:\\s|$)"
+    reason: "Alias for --always-approve; automatically approves all actions without confirmation."
+  - pattern: "openhands\\s+.*--headless(?:\\s|$)"
+    reason: "Headless mode automatically approves agent actions without interactive confirmation."
