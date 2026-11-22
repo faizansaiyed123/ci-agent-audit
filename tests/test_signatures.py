@@ -38,9 +38,9 @@ def _sample(pattern: str) -> str:
     """Turn a flag pattern back into text it matches."""
     if pattern.startswith("(?:kilo|@kilocode/cli"):
         return "kilo run --auto"
-    for regex, text in (("(?:^|\\s)", ""), ("(?:\\s|$)", ""), ("[=\\s]+", "="), ("\\s+", " ")):
+    for regex, text in (("(?:^|\\\\s)", ""), ("(?:\\\\s|$)", ""), ("(?:=|\\\\s+)", "="), ("[=\\\\s]+", "="), ("\\\\s+", " ")):
         pattern = pattern.replace(regex, text)
-    return pattern.replace("\\", "")
+    return pattern.replace("\\\\", "")
 
 
 def _ids(rows: list[tuple]) -> list[str]:
